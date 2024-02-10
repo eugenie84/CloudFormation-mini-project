@@ -1,0 +1,108 @@
+Description: "This CloudFormation stack use the VPC and Subnet create in the SampleNetworkCrossStack to deploys and configures EC2 Instance in a choosing region."
+
+Parameters:
+   EnvironmentType: 
+      Description: Select the appropriate environment type
+      Type: String
+      Default: test
+      AllowedValues: 
+         - prod
+         - dev
+         - test
+      ConstraintDescription: must be a prod dev or test
+
+Mappings: 
+   InstancetypeMap: 
+      prod: 
+         Instancetype: c4.8xlarge
+      dev: 
+         Instancetype: a1.metal
+      test: 
+         Instancetype: t2.micro
+
+   RegionMap: 
+      us-east-1:
+         HVM64: ami-0ff8a91507f77f867
+      us-east-2:
+         HVM64: ami-0866a04d72a1f5479
+      us-west-1:
+         HVM64: ami-0bdb828fd58c52235
+      us-west-2:
+         HVM64: ami-0ecb0bb5d6b19457a
+      eu-west-1:
+         HVM64: ami-047bb4163c506cd98
+      eu-west-2:
+         HVM64: ami-0780837dd83465d73
+      eu-west-3:
+         HVM64: ami-06e7d9bed6ecdc388
+      eu-north-1:
+         HVM64: ami-090793d48e56d862c
+      eu-central-1:
+         HVM64: ami-02fe204d17e0189fb
+      ca-central-1:
+         HVM64: ami-09219f22f73652d74
+      ap-south-1:
+         HVM64: ami-0d63de463e6604d0a
+      ap-northeast-3:
+         HVM64: ami-04d7b860b0e08262e
+      ap-northeast-2:
+         HVM64: ami-00ba43a774eb5870b
+      ap-northeast-1:
+         HVM64: ami-06cd52961ce9f0d85
+      ap-southeast-1:
+         HVM64: ami-08569b978cc4dfa10
+      ap-southeast-2:
+         HVM64: ami-03b4905c5f84d954b
+      ap-northeast-1:
+         HVM64: ami-0b193da66bc27147b
+      sa-east-1:
+         HVM64: ami-00dbf01ec2a2a2cc3
+
+
+Resources:
+   
+   MyEIP:
+      Type: AWS::EC2::EIP
+   MyENI:
+      Type: AWS::EC2::NetworkInterface
+      Properties:
+         SubnetId: !ImportValue SampleNetworkCrossStack-SubnetID
+   MyEIPAssociation:
+      Type: AWS::EC2::EIPAssociation
+      Properties:
+         InstanceId: !Ref 'Ec2Instance'
+         AllocationId: !GetAtt MyEIP.AllocationId
+         NetworkInterfaceId: !Ref 'MyENI'
+           
+   Ec2Instance:
+      Type: AWS::EC2::Instance
+      Properties:
+         InstanceType: !FindInMap [InstancetypeMap, !Ref 'EnvironmentType', Instancetype]          
+         ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", HVM64]
+         SecurityGroupIds: 
+            - !ImportValue SampleNetworkCrossStack-SecurityGroupID
+         SubnetId: !ImportValue SampleNetworkCrossStack-SubnetID
+         UserData:
+            Fn::Base64: !Sub |
+               #!/bin/bash
+               yum update -y
+               yum install -y httpd
+               systemctl status httpd
+               systemctl start httpd
+               systemctl enable httpd
+               echo "<html><head><title>CloudFormation</title></head><body bgcolor=#f1f1f1 text=Red><h1>CloudFormation IS The Best</h1><h2>Welcome to a webserver luanch through CloudFormation. Autamation is easy and faster.</h2></body></html>" > /var/www/html/index.html      
+            
+         Tags:
+            - Key: "Stack"
+              Value: "Production"
+            - Key: Name
+              Value: Test Instance
+
+
+Outputs:
+   EC2InstanceDNS:
+      Description: Public DNS of the EC2 instance
+      Value: !GetAtt Ec2Instance.PublicDnsName
+   EC2InstancePrivateIp:
+      Description: Private IPv4 address of the EC2 instance
+      Value: !GetAtt Ec2Instance.PrivateIp
